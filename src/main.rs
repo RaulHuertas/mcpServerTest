@@ -1,6 +1,6 @@
+use axum::Router;
 use rmcp::{
     ErrorData as McpError,
-    ServiceExt,
     handler::server::{
         ServerHandler,
         router::tool::ToolRouter,
@@ -9,7 +9,10 @@ use rmcp::{
     model::{CallToolResult, Content, ListToolsResult, ServerInfo},
     schemars,
     tool, tool_router,
-    transport::io::stdio,
+    transport::{
+        StreamableHttpServerConfig, StreamableHttpService,
+        streamable_http_server::session::local::LocalSessionManager,
+    },
 };
 use serde::Deserialize;
 
@@ -29,23 +32,26 @@ struct SetColorArgs {
 
 #[tool_router] //this macro is defined in rmcp library
 impl Server {
-    #[tool(name = "showMessage", description = "Show a message in a screen, in a very prominent way")]
+    #[tool(name = "showMessage", description = "Show a message in a screen, in a very prominent way. It's part of aa notification system for developers.")]
     async fn show_message(
         &self,
         Parameters(ShowMessageArgs { message }): Parameters<ShowMessageArgs>,
     ) -> Result<CallToolResult, McpError> {
-        let _ = message;
+        //let _ = message;
         //This is the actual line that should be filled
-        Ok(CallToolResult::success(vec![Content::text("not implemented")]))
+        println!("YOU ARE DISPLAYING A MESSAGE  {}", message);
+        Ok(CallToolResult::success(vec![Content::text("Ok")]))
     }
 
-    #[tool(name = "setColor", description = "Set a color")]
+    #[tool(name = "setColor", description = "Set a color to signal state of an application. It's part of aa notification system for developers.")]
     async fn set_color(
         &self,
         Parameters(SetColorArgs { color }): Parameters<SetColorArgs>,
     ) -> Result<CallToolResult, McpError> {
-        let _ = color;
-        Ok(CallToolResult::success(vec![Content::text("not implemented")]))
+        //let _ = color;
+        println!("YOU ARE DISPLAYING A COLOR  {}", color);
+        Ok(CallToolResult::success(vec![Content::text("Ok")]))
+
     }
 }
 
@@ -90,11 +96,18 @@ impl ServerHandler for Server {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let server = Server::default();
-    let transport = stdio();
+    let service: StreamableHttpService<Server, LocalSessionManager> = StreamableHttpService::new(
+        || Ok(Server::default()),
+        Default::default(),
+        StreamableHttpServerConfig {
+            stateful_mode: true,
+            sse_keep_alive: None,
+        },
+    );
 
-    let _running = server.serve(transport).await?;
+    let app = Router::new().nest_service("/mcp", service);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8000").await?;
 
-    std::future::pending::<()>().await;
+    axum::serve(listener, app).await?;
     Ok(())
 }
